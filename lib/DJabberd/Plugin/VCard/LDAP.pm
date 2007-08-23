@@ -15,11 +15,11 @@ DJabberd::VCard::LDAP - LDAP VCard Provider for DJabberd
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
@@ -38,7 +38,9 @@ Provides an LDAP VCard backend for DJabberd
 LDAPURI , LDAPBaseDN, and LDAPFilter are required
 Everything else is optional.
 
-LDAPFilter is an LDAP filter with a %u that will be substituted with the incoming userid (w/o the domain)
+LDAPFilter is an LDAP filter substutions
+  - %u will be substituted with the incoming userid (w/o the domain) (ie. myuser)
+  - %d will be substituted with the incoming userid's domain (ie. mydoman.com)
 
 =cut
 
@@ -98,34 +100,62 @@ sub _isdef {
 sub load_vcard {
     my ($self, $user) = @_;
 
-    my $suser = $user;
-    $suser =~ s/^(.*)\@.*$/$1/;
+    $user =~ /^(.+)\@(.+)$/;
+    my ($userid,$domain) = ($1, $2);
 
     my $filter = $self->{'ldap_filter'};
-    $filter =~ s/%u/$suser/;
+    $filter =~ s/%u/$userid/;
+    $filter =~ s/%d/$domain/;
     $logger->info("Searching $filter on ".$self->{'ldap_basedn'});
     my $srch = $self->{'ldap_conn'}->search(
 	base=>$self->{'ldap_basedn'},
 	filter=>$filter,
-	attrs=>['dn','sn','cn','givenName','mail','telephoneNumber','title','description','displayName']);
+	attrs=>['dn','sn','cn','givenName','mail','telephoneNumber','title','description','displayName',
+	    'mobile','company','department','wWWHomePage','homePhone','facsimileTelephoneNumber','pager',
+	    'streetAddress','co','postalCode','postOfficeBox','st','l','jpegPhoto']);
     if ($srch->code || $srch->count < 1) {
 	$logger->info("Account $user not found.");
 	return;
     } else {
         my $entry = $srch->entry(0);
+        my $photo = $entry->get_value('jpegPhoto');
+        if (defined $photo) {
+    	    $photo = '<PHOTO><BINVAL>'.$photo.'</BINVAL></PHOTO>';
+    	} else {
+    	    $photo = '';
+    	}
 	my $vCard = '<vCard xmlns="vcard-temp" version="3.0">'
 		.'<FN>'._isdef($entry->get_value('cn')).'</FN>'
 		.'<N>'
 		    .'<FAMILY>'._isdef($entry->get_value('sn')).'</FAMILY>'
 		    .'<GIVEN>'._isdef($entry->get_value('givenName')).'</GIVEN>'
 		.'</N>'
-		.'<TITLE>'._isdef($entry->get_value('title')).'</TITLE>'
 		.'<NICKNAME>'._isdef($entry->get_value('displayName')).'</NICKNAME>'
-		.'<TEL><HOME/><VOICE/><NUMBER>'._isdef($entry->get_value('telephoneNumber')).'</NUMBER></TEL>'
+		.'<ORG>'
+		    .'<ORGNAME>'._isdef($entry->get_value('company')).'</ORGNAME>'
+		    .'<ORGUNIT>'._isdef($entry->get_value('department')).'</ORGUNIT>'
+		.'</ORG>'
+		.'<TITLE>'._isdef($entry->get_value('title')).'</TITLE>'
+		.'<TEL><HOME/><VOICE/><NUMBER>'._isdef($entry->get_value('homePhone')).'</NUMBER></TEL>'
+		.'<TEL><WORK/><VOICE/><NUMBER>'._isdef($entry->get_value('telephoneNumber')).'</NUMBER></TEL>'
+		.'<TEL><WORK/><FAX/><NUMBER>'._isdef($entry->get_value('facsimileTelephoneNumber')).'</NUMBER></TEL>'
+		.'<TEL><WORK/><MSG/><NUMBER>'._isdef($entry->get_value('pager')).'</NUMBER></TEL>'
+		.'<TEL><HOME/><CELL/><NUMBER>'._isdef($entry->get_value('mobile')).'</NUMBER></TEL>'
 		.'<EMAIL><INTERNET/><PREF/><USERID>'._isdef($entry->get_value('mail')).'</USERID></EMAIL>'
+		.'<ADR>'
+		    .'<HOME/>'
+		    .'<EXTADDR/>'
+		    .'<STREET>'._isdef($entry->get_value('streetAddress')).'</STREET>'
+		    .'<LOCALITY>'._isdef($entry->get_value('l')).'</LOCALITY>'
+		    .'<REGION>'._isdef($entry->get_value('st')).'</REGION>'
+		    .'<PCODE>'._isdef($entry->get_value('postalCode')).'</PCODE>'
+		    .'<CTRY>'._isdef($entry->get_value('co')).'</CTRY>'
+		.'</ADR>'
 		.'<JABBERID>'.$user.'</JABBERID>'
+		.$photo
 		.'<DESC>'._isdef($entry->get_value('description')).'</DESC>'
 	    .'</vCard>';
+	$logger->info($vCard);
         undef($entry);
         undef($srch);
 	return $vCard;
