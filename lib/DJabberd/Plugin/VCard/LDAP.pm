@@ -6,6 +6,7 @@ use strict;
 use base 'DJabberd::Plugin::VCard';
 
 use Net::LDAP;
+use MIME::Base64;
 
 our $logger = DJabberd::Log->get_logger();
 
@@ -15,11 +16,11 @@ DJabberd::VCard::LDAP - LDAP VCard Provider for DJabberd
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 SYNOPSIS
 
@@ -120,7 +121,7 @@ sub load_vcard {
         my $entry = $srch->entry(0);
         my $photo = $entry->get_value('jpegPhoto');
         if (defined $photo) {
-    	    $photo = '<PHOTO><BINVAL>'.$photo.'</BINVAL></PHOTO>';
+    	    $photo = '<PHOTO><BINVAL>'.encode_base64($photo).'</BINVAL></PHOTO>';
     	} else {
     	    $photo = '';
     	}
@@ -155,7 +156,6 @@ sub load_vcard {
 		.$photo
 		.'<DESC>'._isdef($entry->get_value('description')).'</DESC>'
 	    .'</vCard>';
-	$logger->info($vCard);
         undef($entry);
         undef($srch);
 	return $vCard;
