@@ -2,6 +2,7 @@ Changes
 MANIFEST
 Makefile.PL
 README
+DJabberd-VCard-LDAP.spec
 lib/DJabberd/Plugin/VCard/LDAP.pm
 t/00-load.t
 t/boilerplate.t

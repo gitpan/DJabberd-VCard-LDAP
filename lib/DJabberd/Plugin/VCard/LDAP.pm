@@ -7,6 +7,7 @@ use base 'DJabberd::Plugin::VCard';
 
 use Net::LDAP;
 use MIME::Base64;
+use DJabberd::Log;
 
 our $logger = DJabberd::Log->get_logger();
 
@@ -16,11 +17,11 @@ DJabberd::VCard::LDAP - LDAP VCard Provider for DJabberd
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -32,6 +33,7 @@ Provides an LDAP VCard backend for DJabberd
             LDAPBindDN		cn=reader
             LDAPBindPW		pass
             LDAPBaseDN		ou=people
+            LDAPVersion         2
             LDAPFilter		(uid=%u)
 	</Plugin>
     </VHost>
@@ -43,6 +45,9 @@ LDAPFilter is an LDAP filter substutions
   - %u will be substituted with the incoming userid (w/o the domain) (ie. myuser)
   - %d will be substituted with the incoming userid's domain (ie. mydoman.com)
 
+LDAPVersion is either 2 or 3, if nothing is specified then default to Net::LDAP default.
+This value is passed straight to Net::LDAP
+
 =cut
 
 sub set_config_ldapuri {
@@ -50,6 +55,11 @@ sub set_config_ldapuri {
     if ( $ldapuri =~ /((?:ldap[si]?\:\/\/)?[\w\.%\d]+\/?)/ ) {
         $self->{'ldap_uri'} = $ldapuri;
     }
+}
+
+sub set_config_ldapversion {
+    my ($self, $ldapversion) = @_;
+    $self->{'ldap_version'} = $ldapversion;
 }
 
 sub set_config_ldapbinddn {
@@ -78,8 +88,11 @@ sub finalize {
     $logger->error_die("No LDAP BaseDN Specified") unless $self->{ldap_basedn};
     $logger->error_die("Must specify filter with userid as %u") unless $self->{ldap_filter};
 
+    my %options;
+    $options{version} = $self->{ldap_version} if $self->{ldap_version};
+
     # Initialize ldap connection
-    $self->{'ldap_conn'} = Net::LDAP->new($self->{ldap_uri})
+    $self->{'ldap_conn'} = Net::LDAP->new($self->{ldap_uri}, %options)
 	or $logger->error_die("Could not connect to LDAP Server ".$self->{ldap_uri});
 
     if (defined $self->{'ldap_binddn'}) {
